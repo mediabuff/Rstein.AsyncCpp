@@ -140,60 +140,7 @@ namespace RStein::AsyncCpp::Tasks
 
     auto ConfigureAwait(bool continueOnCapturedContext) const
     {
-      struct SyncContextAwareTaskAwaiter
-      {
-         Task<TResult> _task;
-         bool _continueOnCapturedContext;
-
-         SyncContextAwareTaskAwaiter(Task<TResult> task, bool continueOnCapturedContext): _task(task),
-                                                                                          _continueOnCapturedContext(continueOnCapturedContext)
-         {
-           
-         }
-
-         [[nodiscard]] bool await_ready() const
-         {
-           return !GlobalTaskSettings::TaskAwaiterAwaitReadyAlwaysReturnsFalse && _task.IsCompleted();
-         }
-
-        [[nodiscard]] bool await_suspend(std::experimental::coroutine_handle<> continuation)
-        {
-          if (!GlobalTaskSettings::TaskAwaiterAwaitReadyAlwaysReturnsFalse && _task.IsCompleted())
-          {
-            return false;
-          }
-           auto syncContext = Threading::SynchronizationContext::Current();
-           if (GlobalTaskSettings::UseOnlyConfigureAwaitFalseBehavior ||
-             !_continueOnCapturedContext ||
-             syncContext->IsDefault())
-           {
-             _task.ContinueWith([continuation=continuation](const auto& _) {continuation();});
-           }
-           else
-           {
-             _task.ContinueWith([continuation=continuation, syncContext](const auto& _)
-             {
-               syncContext->Post(continuation);
-             });
-           }
-
-           return true;
-        }
-
-        [[nodiscard]] Ret_Type await_resume() const
-        {
-          if constexpr(IsTaskReturningVoid())
-          {
-            _task.Wait(); //Propagate exception
-            return (void) 0;
-          }
-          else
-          {
-             return _task.Result();
-          }
-        }
-      };
-
+      
       SyncContextAwareTaskAwaiter awaiter{*this, continueOnCapturedContext};
       return awaiter;
     }
@@ -331,6 +278,60 @@ namespace RStein::AsyncCpp::Tasks
 
     template<typename TContinuationFunc>
     void addContinuation(Task<TContinuationFunc>& continuationTask) const;
+    struct SyncContextAwareTaskAwaiter
+      {
+         Task<TResult> _task;
+         bool _continueOnCapturedContext;
+
+         SyncContextAwareTaskAwaiter(Task<TResult> task, bool continueOnCapturedContext): _task(std::move(task)),
+                                                                                          _continueOnCapturedContext(continueOnCapturedContext)
+         {
+           
+         }
+
+         [[nodiscard]] bool await_ready() const
+         {
+           return !GlobalTaskSettings::TaskAwaiterAwaitReadyAlwaysReturnsFalse && _task.IsCompleted();
+         }
+
+        [[nodiscard]] bool await_suspend(std::experimental::coroutine_handle<> continuation)
+        {
+          if (!GlobalTaskSettings::TaskAwaiterAwaitReadyAlwaysReturnsFalse && _task.IsCompleted())
+          {
+            return false;
+          }
+           auto syncContext = Threading::SynchronizationContext::Current();
+           if (GlobalTaskSettings::UseOnlyConfigureAwaitFalseBehavior ||
+             !_continueOnCapturedContext ||
+             syncContext->IsDefault())
+           {
+             _task.ContinueWith([continuation=continuation](const auto& _) {continuation();});
+           }
+           else
+           {
+             _task.ContinueWith([continuation=continuation, syncContext](const auto& _)
+             {
+               syncContext->Post(continuation);
+             });
+           }
+
+           return true;
+        }
+
+        [[nodiscard]] Ret_Type await_resume() const
+        {
+          if constexpr(IsTaskReturningVoid())
+          {
+            _task.Wait(); //Propagate exception
+            return (void) 0;
+          }
+          else
+          {
+             return _task.Result();
+          }
+        }
+      };
+
   };
 
   template <typename TResult>
@@ -437,6 +438,7 @@ namespace RStein::AsyncCpp::Tasks
       continuationTask.Start();
     });
   }
+
 }
 namespace RStein::Functional
   {

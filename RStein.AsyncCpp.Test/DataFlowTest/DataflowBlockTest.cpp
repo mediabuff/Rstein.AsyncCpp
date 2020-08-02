@@ -28,7 +28,7 @@ namespace RStein::AsyncCpp::DataFlowTest
                                                             auto message = "int: " + to_string(item) + "\n";
                                                             cout << message;
                                                             //await async operation returning standard shared_future.
-                                                            co_await GetCompletedSharedFuture();
+                                                            //co_await GetCompletedSharedFuture();
                                                             co_return to_string(item);
                                                           });
 
